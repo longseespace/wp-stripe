@@ -1,5 +1,9 @@
 <?php
 
+define('INAIR_2D_PRICE', 14999);
+define('INAIR_3D_PRICE', 17999);
+define('SHIPPING_PRICE', 3000);
+
 /**
  * Display the Stripe Form in a Thickbox Pop-up
  *
@@ -89,75 +93,47 @@ function wp_stripe_charge($amount, $card, $name, $description) {
  *
  */
 function inair_charge($amount, $card, $name, $email, $model, $quantity, $shippingAddr) {
-
-	$user = get_user_by( 'email', $email );
-	$customerId = NULL;
-	$userId = NULL;
-	$customer = NULL;
-	$chargeWho = 'card';
-	$description = $quantity.' x '.$model;
-
-	if ($user) {
-		$userId = $user->ID;
-		$customerId = get_user_meta($userId, 'stripe_id', true);
-		try {
-			$customer = Stripe_Customer::retrieve($customerId);	
-		} catch (Exception $e) {
-			$customer = NULL;
-		}
-		
+	// model name
+	if ($model == '2d') {
+		$modelName = "InAiR 2D";
 	} else {
-		$userdata = array(
-	    'user_login'  =>  $email,
-	    'user_email'  =>  $email,
-	    'first_name'  =>  $name,
-	    'user_pass'   =>  wp_generate_password( $length=8, $include_standard_special_chars=false )
-		);
-
-		$userId = wp_insert_user($userdata);
+		$modelName = "InAiR 3D";
 	}
 
-	if (!$customer || $customer->deleted) {
-		// Create a Customer
-		$customer = Stripe_Customer::create(array(
-		  "card" => $card,
-		  "email" => $email,
-		  "description" => $name
-		));
+	// create customer
+	$customer = Stripe_Customer::create(array(
+	  "card" => $card,
+	  "email" => $email,
+	  "description" => $name
+	));
 
-		$customerId = $customer->id;
-		$chargeWho = 'customer';
-	} else {
-		// TODO: add card to customer account
-		// if ($customer->cards) {
-		// 	$customer->cards->create(array('card' => $card));	
-		// } else {
-		// 	$customer->card = $card;
-		// 	$customer->save();
-		// }
-	}
-
-	if( !is_wp_error($userId) ) {
-		update_user_meta($userId, 'stripe_id', $customerId);
-	}
-
-	// charge
-	$chargeData = array(
-		'amount' => $amount,
+	// create shipping invoice item
+	$shippingInvoiceItem = Stripe_InvoiceItem::create(array(
+		'customer' => $customer->id,
+		'amount' => SHIPPING_PRICE,
 		'currency' => 'usd',
-		'description' => $description,
-		'statement_descriptor' => $quantity.' x '.$model,
+		'description' => 'Shipping & Handling',
 		'metadata' => $shippingAddr
-	);
-	if ($chargeWho == 'customer') {
-		$chargeData['customer'] = $customerId;
-	} else {
-		$chargeData['source'] = $card;
-	}
+	));
 
-	$charge = Stripe_Charge::create($chargeData);
+	// create device invoice item
+	$deviceInvoiceItem = Stripe_InvoiceItem::create(array(
+		'customer' => $customer->id,
+		'amount' => $model == '2d' ? $quantity * INAIR_2D_PRICE : $quantity * INAIR_3D_PRICE,
+		'currency' => 'usd',
+		'description' => $quantity.' x '.$modelName,
+		'metadata' => $shippingAddr
+	));
 
-	return $charge;
+	// now create invoice
+	$invoice = Stripe_Invoice::create(array(
+		'customer' => $customer->id,
+	));
+	
+
+	$invoice->pay();
+
+	return $invoice;
 }
 
 /**
@@ -183,11 +159,6 @@ function wp_stripe_charge_initiate() {
 		$email  = sanitize_email( $_POST['wp_stripe_email'] );
 		$quantity = (int) $_POST['quantity'];
 		$model = sanitize_text_field($_POST['model']);
-		if ($model == '2d') {
-			$model = "InAiR 2D";
-		} else {
-			$model = "InAiR 3D";
-		}
 
 		$shippingAddr = array(
 			'shipping_address_apt' => sanitize_text_field($_POST['shipping_address_apt']),

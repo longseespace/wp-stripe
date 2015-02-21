@@ -264,7 +264,7 @@ function wp_stripe_field_ssl () {
  */
 function wp_stripe_add_page() {
 	add_options_page( 'WP Stripe', 'WP Stripe', 'manage_options', 'wp_stripe', 'wp_stripe_options_page' );
-	add_menu_page( 'Orders', 'Orders', 'manage_options', 'wp_stripe_orders', 'wp_stripe_orders_page', 'dashicons-cart', 6 );
+	// add_menu_page( 'Orders', 'Orders', 'manage_options', 'wp_stripe_orders', 'wp_stripe_orders_page', 'dashicons-cart', 6 );
 	remove_menu_page('edit.php?post_type=portfolio');
 	remove_menu_page('edit.php?post_type=news');
 	remove_menu_page('edit.php?post_type=slideshow');
