@@ -264,7 +264,61 @@ function wp_stripe_field_ssl () {
  */
 function wp_stripe_add_page() {
 	add_options_page( 'WP Stripe', 'WP Stripe', 'manage_options', 'wp_stripe', 'wp_stripe_options_page' );
+	add_menu_page( 'Orders', 'Orders', 'manage_options', 'wp_stripe_orders', 'wp_stripe_orders_page', 'dashicons-cart', 6 );
+	remove_menu_page('edit.php?post_type=portfolio');
+	remove_menu_page('edit.php?post_type=news');
+	remove_menu_page('edit.php?post_type=slideshow');
+	remove_menu_page('edit.php?post_type=icarousel');
+	remove_menu_page('edit.php?post_type=banner_builder');
+	remove_menu_page('edit.php?post_type=tab_slider');
+	remove_menu_page('edit_comments.php');
 }
+
+function wp_stripe_orders_page(){?>
+
+	<style type="text/css">
+	.update-nag { display: none; }
+	</style>
+
+	<div id="wp-stripe-tabs">
+
+		<h1 class="stripe-title">Orders</h1>
+
+		<div style="clear:both"></div>
+
+		<div id="wp-stripe-tab-transactions">
+
+			<table class="wp-stripe-transactions">
+
+			  <thead>
+
+			  <tr>
+
+				  <th style="width:44px;"><div class="dot-stripe-live"></div></th>
+				  <th style="width:200px;">Person</th>
+				  <th style="width:140px;">Net Amount (Fee)</th>
+				  <th style="width:80px;">Date</th>
+
+				  <th>Comment</th>
+				  <th>Actions</th>
+
+			  </tr></thead>
+
+			<?php wp_stripe_options_display_trx(); ?>
+
+			<p style="color:#777">The amount of payments display is limited to 500. Log in to your <a href="https://manage.stripe.com/dashboard">Stripe dashboard</a> to see more.</p>
+			<div style="color:#777"><div class="dot-stripe-live"></div>Live Environment (as opposed to Test API)</div>
+
+			<br />
+
+			<form method="POST">
+				<input type="hidden" name="wp_stripe_delete_tests" value="1">
+				<input type="submit" class="button" value="Delete all test transactions">
+			</form>
+
+		</div>
+	</div>
+<?php }
 
 /**
  * Create Options Page Content
@@ -307,6 +361,7 @@ function wp_stripe_options_page() { ?>
 				  <th style="width:80px;">Date</th>
 
 				  <th>Comment</th>
+				  <th>Actions</th>
 
 			  </tr></thead>
 
@@ -405,7 +460,6 @@ function wp_stripe_delete_tests() {
 
 			// Delete Post
 			if ( get_post_meta( get_the_id(), 'wp-stripe-live', true ) === 'TEST' ) {
-				var_dump( the_title() );
 				wp_delete_post( get_the_id(), true );
 			}
 

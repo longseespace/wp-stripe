@@ -59,6 +59,9 @@ function wp_stripe_options_display_trx() {
             $currency = $custom['wp-stripe-currency'][0];
             $net = round($amount - $fee,2);
 
+            $charged = $custom['wp-stripe-charged'][0];
+            $canceled = $custom['wp-stripe-canceled'][0];
+
             echo '<tr>';
 
             // Dot
@@ -69,12 +72,6 @@ function wp_stripe_options_display_trx() {
                 $dotlive = '<div class="dot-stripe-test"></div>';
             }
 
-            if ( $public == 'YES' ) {
-                $dotpublic = '<div class="dot-stripe-public"></div>';
-            } else {
-                $dotpublic = '<div class="dot-stripe-test"></div>';
-            }
-
             // Person
 
             $img = get_avatar( $email, 32 );
@@ -82,7 +79,13 @@ function wp_stripe_options_display_trx() {
 
             // Received
 
-            $received = '<span class="stripe-netamount"> + ' . $net . '</span> ' . $currency . ' (-' . $fee . ')';
+            if ($canceled) {
+                $received = 'Canceled';
+            } else if (!$charged) {
+                $received = 'Not yet charged';
+            } else {
+                $received = '<span class="stripe-netamount"> + ' . $net . '</span> ' . $currency . ' (-' . $fee . ')';
+            }
 
             // Content
 
@@ -91,6 +94,15 @@ function wp_stripe_options_display_trx() {
             echo '<td>' . $received . '</td>';
             echo '<td>' . $cleandate . ' - ' . $cleantime . '</td>';
             echo '<td class="stripe-comment">"' . $content . '"</td>';
+            if (!$charged && !$canceled) {
+                echo '<td class="actions"><input name="charge" type="button" class="button button-primary" value="Charge" />&nbsp;&nbsp;&nbsp;<input name="cancel" type="button" class="button button-secondary" value="Cancel" /></td>';   
+            }
+            if ($charged) {
+                echo '<td class="actions">Charged</td>';      
+            }
+            if ($canceled) {
+                echo '<td class="actions">Canceled</td>';      
+            }
 
             echo '</tr>';
 

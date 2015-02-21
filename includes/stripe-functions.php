@@ -83,6 +83,84 @@ function wp_stripe_charge($amount, $card, $name, $description) {
 }
 
 /**
+ * Charge
+ *
+ * @since 1.0
+ *
+ */
+function inair_charge($amount, $card, $name, $email, $model, $quantity, $shippingAddr) {
+
+	$user = get_user_by( 'email', $email );
+	$customerId = NULL;
+	$userId = NULL;
+	$customer = NULL;
+	$chargeWho = 'card';
+	$description = $quantity.' x '.$model;
+
+	if ($user) {
+		$userId = $user->ID;
+		$customerId = get_user_meta($userId, 'stripe_id', true);
+		try {
+			$customer = Stripe_Customer::retrieve($customerId);	
+		} catch (Exception $e) {
+			$customer = NULL;
+		}
+		
+	} else {
+		$userdata = array(
+	    'user_login'  =>  $email,
+	    'user_email'  =>  $email,
+	    'first_name'  =>  $name,
+	    'user_pass'   =>  wp_generate_password( $length=8, $include_standard_special_chars=false )
+		);
+
+		$userId = wp_insert_user($userdata);
+	}
+
+	if (!$customer || $customer->deleted) {
+		// Create a Customer
+		$customer = Stripe_Customer::create(array(
+		  "card" => $card,
+		  "email" => $email,
+		  "description" => $name
+		));
+
+		$customerId = $customer->id;
+		$chargeWho = 'customer';
+	} else {
+		// TODO: add card to customer account
+		// if ($customer->cards) {
+		// 	$customer->cards->create(array('card' => $card));	
+		// } else {
+		// 	$customer->card = $card;
+		// 	$customer->save();
+		// }
+	}
+
+	if( !is_wp_error($userId) ) {
+		update_user_meta($userId, 'stripe_id', $customerId);
+	}
+
+	// charge
+	$chargeData = array(
+		'amount' => $amount,
+		'currency' => 'usd',
+		'description' => $description,
+		'statement_descriptor' => $quantity.' x '.$model,
+		'metadata' => $shippingAddr
+	);
+	if ($chargeWho == 'customer') {
+		$chargeData['customer'] = $customerId;
+	} else {
+		$chargeData['source'] = $card;
+	}
+
+	$charge = Stripe_Charge::create($chargeData);
+
+	return $charge;
+}
+
+/**
  * 3-step function to Process & Save Transaction
  *
  * 1) Capture POST
@@ -103,6 +181,24 @@ function wp_stripe_charge_initiate() {
 		$public = sanitize_text_field( $_POST['wp_stripe_public'] );
 		$name   = sanitize_text_field( $_POST['wp_stripe_name'] );
 		$email  = sanitize_email( $_POST['wp_stripe_email'] );
+		$quantity = (int) $_POST['quantity'];
+		$model = sanitize_text_field($_POST['model']);
+		if ($model == '2d') {
+			$model = "InAiR 2D";
+		} else {
+			$model = "InAiR 3D";
+		}
+
+		$shippingAddr = array(
+			'shipping_address_apt' => sanitize_text_field($_POST['shipping_address_apt']),
+			'shipping_address_city' => sanitize_text_field($_POST['shipping_address_city']),
+			'shipping_address_country' => sanitize_text_field($_POST['shipping_address_country']),
+			'shipping_address_country_code' => sanitize_text_field($_POST['shipping_address_country_code']),
+			'shipping_address_line1' => sanitize_text_field($_POST['shipping_address_line1']),
+			'shipping_address_state' => sanitize_text_field($_POST['shipping_address_state']),
+			'shipping_address_zip' => sanitize_text_field($_POST['shipping_address_zip']),
+			'shipping_name' => sanitize_text_field($_POST['shipping_name'])
+		);
 
 		// Strip any comments from the amount
 		$amount = str_replace( ',', '', sanitize_text_field( $_POST['wp_stripe_amount'] ) );
@@ -121,26 +217,20 @@ function wp_stripe_charge_initiate() {
 			$widget_comment = sanitize_text_field( $_POST['wp_stripe_comment'] );
 		}
 
-		// Create Charge
+		// Create invoice
 		try {
 
-			$response = wp_stripe_charge( $amount, $card, $name, $stripe_comment );
+			$charge = inair_charge( $amount, $card, $name, $email, $model, $quantity, $shippingAddr );
 
-			$id       = $response->id;
-			$amount   = $response->amount / 100;
-			$currency = $response->currency;
-			$created  = $response->created;
-			$live     = $response->livemode;
-			$paid     = $response->paid;
+			$id       = $charge->id;
+			$currency = $charge->currency;
+			$created  = $charge->created;
+			$live     = $charge->livemode;
 
-			if ( isset( $response->fee ) ) {
-				$fee  = $response->fee;
-			}
+			$result =  array('success' => true);
 
-			$result =  '<div class="wp-stripe-notification wp-stripe-success"> ' . sprintf( __( 'Success, you just transferred %s', 'wp-stripe' ), '<span class="wp-stripe-currency">' . esc_html( $currency ) . '</span> ' . esc_html( $amount ) ) . ' !</div>';
-
-			// Save Charge
-			if ( $paid === true ) {
+			// Save Customer
+			// if ( $paid === true ) {
 
 				$post_id = wp_insert_post( array(
                     'post_type'	   => 'wp-stripe-trx',
@@ -165,29 +255,30 @@ function wp_stripe_charge_initiate() {
 				}
 
 				// Update Meta
+				update_post_meta( $post_id, 'wp-stripe-customerid', $id );
+
 				update_post_meta( $post_id, 'wp-stripe-public', $public );
 				update_post_meta( $post_id, 'wp-stripe-name', $name );
 				update_post_meta( $post_id, 'wp-stripe-email', $email );
 
 				update_post_meta( $post_id, 'wp-stripe-live', $live );
 				update_post_meta( $post_id, 'wp-stripe-date', $created );
-				update_post_meta( $post_id, 'wp-stripe-amount', $amount );
+				update_post_meta( $post_id, 'wp-stripe-charged', false );
+				update_post_meta( $post_id, 'wp-stripe-canceled', false );
 				update_post_meta( $post_id, 'wp-stripe-currency', strtoupper( $currency ) );
+				update_post_meta( $post_id, 'wp-stripe-amount', $amount );
 
-				if ( isset( $fee ) )
-					update_post_meta( $post_id, 'wp-stripe-fee', $fee );
-
-				do_action( 'wp_stripe_post_successful_charge', $response, $email, $stripe_comment );
+				do_action( 'wp_stripe_post_successful_charge', $charge, $email, $stripe_comment );
 
 				// Update Project
 				// wp_stripe_update_project_transactions( 'add', $project_id , $post_id );
 
-			}
+			// }
 
 		// Error
 		} catch ( Exception $e ) {
 
-			$result = '<div class="wp-stripe-notification wp-stripe-failure">' . sprintf( __( 'Oops, something went wrong (%s)', 'wp-stripe' ), $e->getMessage() ) . '</div>';
+			$result = array('success' => false, 'error' => $e->getMessage(), 'body' => $e->getJsonBody());
 			do_action( 'wp_stripe_post_fail_charge', $email, $e->getMessage() );
 
 		}
