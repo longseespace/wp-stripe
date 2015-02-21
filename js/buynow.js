@@ -1,3 +1,4 @@
+var CONFIRMATION_URL = '/';
 
 jQuery(document).ready(function($) {
 
@@ -20,7 +21,7 @@ jQuery(document).ready(function($) {
   $('.selection-buttons > div.item').click(function(e) {
     e.preventDefault();
     $('#error-message > span').html('');
-    
+
     var $this = $(this);
     $('.selection-buttons > div.item').removeClass('selected');
     $this.addClass('selected');
@@ -40,6 +41,7 @@ jQuery(document).ready(function($) {
   var resetStripeForm = function() {
     $("#wp-stripe-payment-form").get(0).reset();
     $('input').removeClass('stripe-valid stripe-invalid');
+    $("#wp-stripe-payment-form input[name='stripeToken']").remove();
   }
 
   $('#check-out').click(function(e) {
@@ -50,6 +52,11 @@ jQuery(document).ready(function($) {
     var $this = $(this);
 
     if ($this.hasClass('disabled')) {
+      return;
+    };
+
+    if ($this.hasClass('completed')) {
+      document.location = CONFIRMATION_URL;
       return;
     };
 
@@ -125,8 +132,9 @@ jQuery(document).ready(function($) {
             $('#check-out').removeClass('disabled');
 
             if (response.success) {
+              $('#check-out').addClass('completed');
               $('#check-out > span').text('Completed');
-              document.location = "/";
+              document.location = CONFIRMATION_URL;
 
               $('.wp-stripe-details').prepend(response);
               $('.stripe-submit-button').prop("disabled", false).css("opacity","1.0");

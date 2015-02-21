@@ -104,7 +104,7 @@ function inair_charge($amount, $card, $name, $email, $model, $quantity, $metadat
 	$customer = Stripe_Customer::create(array(
 	  "card" => $card,
 	  "email" => $email,
-	  "description" => $metadata
+	  "description" => $metadata['shipping'] ? $metadata['shipping'] : $name
 	));
 
 	// create shipping invoice item
@@ -132,7 +132,7 @@ function inair_charge($amount, $card, $name, $email, $model, $quantity, $metadat
 		'metadata' => $metadata
 	));
 	
-	$invoice = $invoice->pay();
+	$invoice->pay();
 
 	return $invoice;
 }
