@@ -19,6 +19,8 @@ jQuery(document).ready(function($) {
 
   $('.selection-buttons > div.item').click(function(e) {
     e.preventDefault();
+    $('#error-message > span').html('');
+    
     var $this = $(this);
     $('.selection-buttons > div.item').removeClass('selected');
     $this.addClass('selected');
@@ -42,6 +44,8 @@ jQuery(document).ready(function($) {
 
   $('#check-out').click(function(e) {
     e.preventDefault();
+
+    $('#error-message > span').html('');
 
     var $this = $(this);
 
@@ -118,14 +122,21 @@ jQuery(document).ready(function($) {
           url : ajaxurl,
           data : newStripeForm,
           success: function(response) {
-
             $('#check-out').removeClass('disabled');
-            $('#check-out > span').text('Check Out');
 
-            $('.wp-stripe-details').prepend(response);
-            $('.stripe-submit-button').prop("disabled", false).css("opacity","1.0");
-            $('.stripe-submit-button .spinner').fadeOut("slow");
-            $('.stripe-submit-button span').removeClass('spinner-gap');
+            if (response.success) {
+              $('#check-out > span').text('Completed');
+              document.location = "/";
+
+              $('.wp-stripe-details').prepend(response);
+              $('.stripe-submit-button').prop("disabled", false).css("opacity","1.0");
+              $('.stripe-submit-button .spinner').fadeOut("slow");
+              $('.stripe-submit-button span').removeClass('spinner-gap');
+            } else {
+              $('#error-message > span').html('Error: ' + response.error);
+              $('#check-out > span').text('Check Out');
+            }
+            
             resetStripeForm();
           }
         });
